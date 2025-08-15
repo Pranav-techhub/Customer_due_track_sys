@@ -1,36 +1,49 @@
-from flask import Blueprint, request, jsonify
-from . import data_handler as dh
+from flask import request, jsonify
+from .data_handler import (
+    add_customer, get_all_customers, get_customer_by_id,
+    update_customer, delete_customer, delete_all_customers
+)
 
-bp = Blueprint("routes", __name__)
+def register_routes(app):
 
-@bp.route("/customers", methods=["POST"])
-def add_customer():
-    data = request.json
-    return jsonify(dh.add_customer(**data))
+    @app.route("/customers", methods=["POST"])
+    def create_customer():
+        data = request.json
+        if not data or "name" not in data or "phone" not in data or "due_amount" not in data:
+            return jsonify({"error": "Missing required fields"}), 400
+        add_customer(data)
+        return jsonify({"message": "Customer added successfully"}), 201
 
-@bp.route("/customers", methods=["GET"])
-def get_customers():
-    return jsonify(dh.get_all_customers())
+    @app.route("/customers", methods=["GET"])
+    def list_customers():
+        customers = get_all_customers()
+        return jsonify(customers), 200
 
-@bp.route("/customers/<int:customer_id>", methods=["GET"])
-def get_customer(customer_id):
-    cust = dh.get_customer_by_id(customer_id)
-    return jsonify(cust) if cust else ({"error": "Not found"}, 404)
+    @app.route("/customers/<customer_id>", methods=["GET"])
+    def get_customer(customer_id):
+        customer = get_customer_by_id(customer_id)
+        if not customer:
+            return jsonify({"error": "Customer not found"}), 404
+        return jsonify(customer), 200
 
-@bp.route("/customers/<int:customer_id>", methods=["PUT"])
-def update_customer(customer_id):
-    updates = request.json
-    return jsonify(dh.update_customer(customer_id, updates))
+    @app.route("/customers/<customer_id>", methods=["PUT"])
+    def edit_customer(customer_id):
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        updated = update_customer(customer_id, data)
+        if not updated:
+            return jsonify({"error": "Customer not found"}), 404
+        return jsonify({"message": "Customer updated successfully"}), 200
 
-@bp.route("/customers/<int:customer_id>", methods=["DELETE"])
-def delete_customer(customer_id):
-    return jsonify(dh.delete_customer(customer_id))
+    @app.route("/customers/<customer_id>", methods=["DELETE"])
+    def remove_customer(customer_id):
+        deleted = delete_customer(customer_id)
+        if not deleted:
+            return jsonify({"error": "Customer not found"}), 404
+        return jsonify({"message": "Customer deleted successfully"}), 200
 
-@bp.route("/customers", methods=["DELETE"])
-def delete_all():
-    return jsonify(dh.delete_all_customers())
-
-@bp.route("/customers/sort", methods=["GET"])
-def sort_customers():
-    order = request.args.get("order", "asc") == "asc"
-    return jsonify(dh.sort_customers_by_due(order))
+    @app.route("/customers", methods=["DELETE"])
+    def remove_all_customers():
+        delete_all_customers()
+        return jsonify({"message": "All customers deleted successfully"}), 200

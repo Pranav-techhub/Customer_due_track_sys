@@ -1,11 +1,13 @@
-import pandas as pd
-from .config import CUSTOMERS_CSV
+import logging
+from functools import wraps
 
-def load_customers():
-    try:
-        return pd.read_csv(CUSTOMERS_CSV)
-    except FileNotFoundError:
-        return pd.DataFrame(columns=["id", "name", "phone", "email", "address", "due_amount"])
+logging.basicConfig(filename="logs.csv", level=logging.INFO, format="%(asctime)s,%(message)s")
 
-def save_customers(df):
-    df.to_csv(CUSTOMERS_CSV, index=False)
+def log_action(action):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            logging.info(action)
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator

@@ -1,46 +1,66 @@
-from flask import jsonify, request
-from . import data_handler
+from flask import Blueprint, request, jsonify
+from data_handler import read_customers, write_customers
 
+customer_bp = Blueprint("customers", __name__)
 
-def register_routes(app):
+# ---------- View Customers ----------
+@customer_bp.route("/customers", methods=["GET"])
+def get_customers():
+    customers = read_customers()
+    return jsonify(customers), 200
 
-    @app.route("/customers", methods=["GET"])
-    def get_customers():
-        customers = data_handler.get_all_customers()
-        return jsonify(customers)
+# ---------- Add Customer ----------
+@customer_bp.route("/customers", methods=["POST"])
+def add_customer():
+    data = request.json
+    if not data or "name" not in data or "phone" not in data:
+        return jsonify({"error": "Name and Phone are required"}), 400
 
-    @app.route("/customers/<int:customer_id>", methods=["GET"])
-    def get_single_customer(customer_id):
-        customer = data_handler.get_customer(customer_id)
-        if customer:
-            return jsonify(customer)
+    customers = read_customers()
+
+    # Assign ID serially
+    existing_ids = [c["id"] for c in customers]
+    new_id = 1
+    while new_id in existing_ids:
+        new_id += 1
+
+    data["id"] = new_id
+    customers.append(data)
+    write_customers(customers)
+
+    return jsonify({"message": "Customer added successfully", "id": new_id}), 201
+
+# ---------- Update Customer ----------
+@customer_bp.route("/customers/<int:customer_id>", methods=["PUT"])
+def update_customer(customer_id):
+    customers = read_customers()
+    customer = next((c for c in customers if c["id"] == customer_id), None)
+
+    if not customer:
         return jsonify({"error": "Customer not found"}), 404
 
-    @app.route("/customers", methods=["POST"])
-    def add_customer():
-        data = request.json
-        required = ["name", "phone", "due_amount"]
-        if not all(field in data for field in required):
-            return jsonify({"error": "Missing required fields"}), 400
-        customer = data_handler.add_customer(data)
-        return jsonify({"message": "Customer added successfully", "customer": customer})
+    updates = request.json
+    if not updates:
+        return jsonify({"error": "No updates provided"}), 400
 
-    @app.route("/customers/<int:customer_id>", methods=["PUT"])
-    def update_customer(customer_id):
-        data = request.json
-        customer = data_handler.update_customer(customer_id, data)
-        if not customer:
-            return jsonify({"error": "Customer not found"}), 404
-        return jsonify({"message": "Customer updated successfully", "customer": customer})
+    customer.update(updates)
+    write_customers(customers)
+    return jsonify({"message": "Customer updated successfully"}), 200
 
-    @app.route("/customers/<int:customer_id>", methods=["DELETE"])
-    def delete_customer(customer_id):
-        deleted = data_handler.delete_customer(customer_id)
-        if not deleted:
-            return jsonify({"error": "Customer not found"}), 404
-        return jsonify({"message": "Customer deleted successfully"})
+# ---------- Delete Customer ----------
+@customer_bp.route("/customers/<int:customer_id>", methods=["DELETE"])
+def delete_customer(customer_id):
+    customers = read_customers()
+    updated_customers = [c for c in customers if c["id"] != customer_id]
 
-    @app.route("/customers", methods=["DELETE"])
-    def delete_all():
-        data_handler.delete_all_customers()
-        return jsonify({"message": "All customers deleted successfully"})
+    if len(customers) == len(updated_customers):
+        return jsonify({"error": "Customer not found"}), 404
+
+    write_customers(updated_customers)
+    return jsonify({"message": "Customer deleted successfully"}), 200
+
+# ---------- Delete All ----------
+@customer_bp.route("/customers", methods=["DELETE"])
+def delete_all_customers():
+    write_customers([])
+    return jsonify({"message": "All customers deleted"}), 200
